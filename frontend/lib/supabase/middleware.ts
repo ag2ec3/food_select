@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireSupabasePublicEnv } from "@/lib/supabase/publicEnv";
+import { parseSupabasePublicEnv } from "@/lib/supabase/publicEnv";
 
 /**
  * Refreshes the Supabase session on each matched request so cookies stay in sync.
@@ -11,12 +11,16 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const { url, anonKey } = requireSupabasePublicEnv();
+  const env = parseSupabasePublicEnv();
+  if (!env.ok) {
+    console.error("[supabase middleware]", env.message);
+    return supabaseResponse;
+  }
 
-  const supabase = createServerClient(
-    url,
-    anonKey,
-    {
+  const { url, anonKey } = env;
+
+  try {
+    const supabase = createServerClient(url, anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -33,10 +37,13 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
-    },
-  );
+    });
 
-  await supabase.auth.getUser();
+    await supabase.auth.getUser();
+  } catch (err) {
+    console.error("[supabase middleware] session refresh failed", err);
+    return NextResponse.next({ request });
+  }
 
   return supabaseResponse;
 }
