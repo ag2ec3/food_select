@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { NETWORK_ERROR_MESSAGE } from "@/lib/apiErrors";
+import { mapSupabaseAuthErrorMessage } from "@/lib/apiErrors";
 import type { User } from "@/lib/types";
 import { mapAuthUserToUser } from "@/lib/mapAuthUser";
 import { createClient } from "@/lib/supabase/client";
@@ -37,25 +37,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
     let cancelled = false;
+    let subscription: { unsubscribe: () => void } | undefined;
 
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+    try {
+      const supabase = createClient();
+
+      void supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+        if (!cancelled) {
+          setUser(mapAuthUserToUser(authUser));
+          setReady(true);
+        }
+      });
+
+      const { data: authSub } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          setUser(mapAuthUserToUser(session?.user ?? null));
+        },
+      );
+      subscription = authSub.subscription;
+    } catch {
       if (!cancelled) {
-        setUser(mapAuthUserToUser(authUser));
         setReady(true);
       }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(mapAuthUserToUser(session?.user ?? null));
-    });
+    }
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
@@ -64,18 +73,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!trimmed || !password) {
       return { ok: false as const, message: "이메일과 비밀번호를 입력해 주세요." };
     }
-    const supabase = createClient();
     try {
+      const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({
         email: trimmed,
         password,
       });
       if (error) {
-        return { ok: false as const, message: error.message };
+        return {
+          ok: false as const,
+          message: mapSupabaseAuthErrorMessage(error.message),
+        };
       }
       return { ok: true as const };
-    } catch {
-      return { ok: false as const, message: NETWORK_ERROR_MESSAGE };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      return {
+        ok: false as const,
+        message: msg || mapSupabaseAuthErrorMessage(undefined),
+      };
     }
   }, []);
 
@@ -96,14 +112,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         });
         if (error) {
-          return { ok: false as const, message: error.message };
+          return {
+            ok: false as const,
+            message: mapSupabaseAuthErrorMessage(error.message),
+          };
         }
         if (!data.session) {
           return { ok: true as const, needsEmailConfirmation: true };
         }
         return { ok: true as const, needsEmailConfirmation: false };
-      } catch {
-        return { ok: false as const, message: NETWORK_ERROR_MESSAGE };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        return {
+          ok: false as const,
+          message: msg || mapSupabaseAuthErrorMessage(undefined),
+        };
       }
     },
     [],

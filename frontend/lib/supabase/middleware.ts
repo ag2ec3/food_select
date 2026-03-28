@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { requireSupabasePublicEnv } from "@/lib/supabase/publicEnv";
 
 /**
  * Refreshes the Supabase session on each matched request so cookies stay in sync.
@@ -10,9 +11,11 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const { url, anonKey } = requireSupabasePublicEnv();
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {

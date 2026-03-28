@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
@@ -70,49 +71,52 @@ export async function POST(request: Request) {
 
   let invite = randomInviteCode();
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const { data, error } = await supabase.rpc("create_team_with_owner", {
-      p_name: name,
-      p_invite_code: invite,
+    const teamId = randomUUID();
+
+    const { error: teamErr } = await supabase.from("teams").insert({
+      id: teamId,
+      name,
+      invite_code: invite,
     });
 
-    if (!error && data) {
-      const raw = data as
-        | {
-            id: string;
-            name: string;
-            created_at: string;
-            invite_code: string;
-          }
-        | Array<{
-            id: string;
-            name: string;
-            created_at: string;
-            invite_code: string;
-          }>;
-      const team = Array.isArray(raw) ? raw[0] : raw;
-      if (team) {
-        return NextResponse.json({
-          id: team.id,
-          name: team.name,
-          created_at: team.created_at,
-          invite_code: team.invite_code,
-        });
-      }
-    }
-
     if (
-      error?.message?.includes("duplicate") ||
-      error?.code === "23505"
+      teamErr &&
+      (teamErr.message?.includes("duplicate") || teamErr.code === "23505")
     ) {
       invite = randomInviteCode();
       continue;
     }
 
-    if (error?.message?.includes("invalid_name")) {
-      return jsonError(400, "팀 이름을 입력해 주세요.");
+    if (teamErr) {
+      return jsonError(500, teamErr.message ?? "팀을 만들 수 없습니다.");
     }
 
-    return jsonError(500, error?.message ?? "팀을 만들 수 없습니다.");
+    const { error: memberErr } = await supabase.from("memberships").insert({
+      team_id: teamId,
+      user_id: user.id,
+      role: "owner",
+    });
+
+    if (memberErr) {
+      return jsonError(500, memberErr.message ?? "팀 소유자 등록에 실패했습니다.");
+    }
+
+    const { data: team, error: readErr } = await supabase
+      .from("teams")
+      .select("id, name, created_at, invite_code")
+      .eq("id", teamId)
+      .single();
+
+    if (readErr || !team) {
+      return jsonError(500, readErr?.message ?? "팀을 불러오지 못했습니다.");
+    }
+
+    return NextResponse.json({
+      id: team.id,
+      name: team.name,
+      created_at: team.created_at,
+      invite_code: team.invite_code,
+    });
   }
 
   return jsonError(500, "초대 코드 충돌이 반복되었습니다. 다시 시도해 주세요.");

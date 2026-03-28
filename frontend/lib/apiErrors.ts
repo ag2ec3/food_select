@@ -1,3 +1,26 @@
 /** Shown when `fetch` throws or the browser cannot reach the server. */
 export const NETWORK_ERROR_MESSAGE =
   "네트워크 오류가 발생했습니다. 연결을 확인한 뒤 다시 시도해 주세요.";
+
+const FETCH_FAILURE_MARKERS = [
+  "failed to fetch",
+  "networkerror",
+  "load failed",
+  "fetch failed",
+] as const;
+
+/** Supabase Auth often returns only "Failed to fetch" for bad env, DNS, or blocked requests. */
+export function mapSupabaseAuthErrorMessage(raw: string | undefined): string {
+  const m = raw?.trim() ?? "";
+  if (!m) {
+    return NETWORK_ERROR_MESSAGE;
+  }
+  const lower = m.toLowerCase();
+  if (
+    lower === "failed to fetch" ||
+    FETCH_FAILURE_MARKERS.some((x) => lower.includes(x))
+  ) {
+    return `${NETWORK_ERROR_MESSAGE} Supabase URL·anon 키(frontend/.env.local)가 맞는지, 개발 서버를 재시작했는지, Supabase 프로젝트가 활성인지·방화벽을 확인해 주세요.`;
+  }
+  return m;
+}
