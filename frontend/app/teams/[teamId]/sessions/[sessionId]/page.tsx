@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/Button";
 import { NETWORK_ERROR_MESSAGE } from "@/lib/apiErrors";
 import { useAuth } from "@/lib/authContext";
+import { pickMenuSuggestions } from "@/lib/menuSuggestions";
 import type {
   Candidate,
   Decision,
@@ -51,6 +52,7 @@ export default function SessionDetailPage() {
   const [voteError, setVoteError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
 
   const loadDetail = useCallback(async () => {
     if (!teamId || !sessionId) return;
@@ -155,31 +157,78 @@ export default function SessionDetailPage() {
   const wrongTeam =
     session && teamId && session.team_id !== teamId ? true : false;
 
-  async function handleAddMenu(e: React.FormEvent) {
-    e.preventDefault();
+  const candidateMenuSignature = useMemo(
+    () => candidates.map((c) => c.menu_name).join("\u0001"),
+    [candidates],
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      setRecommendations([]);
+      return;
+    }
+    setRecommendations(
+      pickMenuSuggestions(
+        candidates.map((c) => c.menu_name),
+        3,
+      ),
+    );
+    /* 후보 메뉴명 집합이 바뀔 때만 풀에서 다시 뽑는다 (같은 세트면 추천 유지). */
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- candidateMenuSignature가 위 candidates 메뉴명 집합과 동기화됨
+  }, [isOpen, candidateMenuSignature]);
+
+  async function submitCandidate(
+    rawName: string,
+    options?: { clearInputOnSuccess?: boolean },
+  ): Promise<boolean> {
+    const menuName = rawName.trim();
+    if (!menuName) {
+      setMenuError("메뉴 이름을 입력해 주세요.");
+      return false;
+    }
     setMenuError(null);
     setVoteError(null);
-    if (!user || !sessionId || !isOpen || actionBusy) return;
+    if (!user || !sessionId || !isOpen || actionBusy) return false;
     setActionBusy(true);
     try {
       const res = await fetch(`/api/sessions/${sessionId}/candidates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ menu_name: menuInput }),
+        body: JSON.stringify({ menu_name: menuName }),
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
         setMenuError(json.error ?? "메뉴를 추가할 수 없습니다.");
-        return;
+        return false;
       }
-      setMenuInput("");
+      if (options?.clearInputOnSuccess) setMenuInput("");
       await loadDetail();
+      return true;
     } catch {
       setMenuError(NETWORK_ERROR_MESSAGE);
+      return false;
     } finally {
       setActionBusy(false);
     }
+  }
+
+  async function handleAddMenu(e: React.FormEvent) {
+    e.preventDefault();
+    await submitCandidate(menuInput, { clearInputOnSuccess: true });
+  }
+
+  function refreshRecommendations() {
+    setRecommendations(
+      pickMenuSuggestions(
+        candidates.map((c) => c.menu_name),
+        3,
+      ),
+    );
+  }
+
+  async function handleAddSuggestedMenu(name: string) {
+    await submitCandidate(name);
   }
 
   async function handleVote(candidateId: string) {
@@ -348,7 +397,55 @@ export default function SessionDetailPage() {
           >
             메뉴 제안
           </label>
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+          <div className="mt-3 rounded-xl border border-zinc-200 bg-zinc-50/90 px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-zinc-800">추천 메뉴</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={
+                  !user ||
+                  actionBusy ||
+                  recommendations.length === 0
+                }
+                onClick={refreshRecommendations}
+              >
+                다른 추천
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              자주 고르는 점심 메뉴에서 골랐어요. 탭하면 후보에 바로 넣을 수 있어요.
+            </p>
+            <ul
+              className="mt-3 flex flex-wrap gap-2"
+              aria-live="polite"
+              aria-label="추천 메뉴 목록"
+            >
+              {recommendations.length === 0 ? (
+                <li className="text-sm text-zinc-600">
+                  추천할 새 메뉴가 없어요. 직접 입력해 보세요.
+                </li>
+              ) : (
+                recommendations.map((name) => (
+                  <li key={name}>
+                    <button
+                      type="button"
+                      disabled={!user || actionBusy}
+                      onClick={() => void handleAddSuggestedMenu(name)}
+                      className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/30 disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {name}
+                      <span className="ml-1.5 text-xs font-normal text-zinc-500">
+                        후보 추가
+                      </span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <input
               id="menu-proposal"
               name="menu"

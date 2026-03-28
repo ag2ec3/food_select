@@ -2,9 +2,27 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/Button";
 import { useAuth } from "@/lib/authContext";
+
+/** Total length bound aligned with common SMTP / RFC practice (≤254). */
+const MAX_EMAIL_LENGTH = 254;
+
+function validateLoginFields(email: string, password: string): string | null {
+  const trimmedEmail = email.trim();
+  const trimmedPassword = password.trim();
+  if (!trimmedEmail || !trimmedPassword) {
+    return "이메일과 비밀번호를 입력해 주세요.";
+  }
+  if (trimmedEmail.length > MAX_EMAIL_LENGTH) {
+    return "이메일이 너무 깁니다.";
+  }
+  if (!trimmedEmail.includes("@")) {
+    return "올바른 이메일 형식이 아닙니다.";
+  }
+  return null;
+}
 
 export default function LoginPage() {
   const { user, ready, login } = useAuth();
@@ -13,6 +31,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const submitInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -23,16 +42,27 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitInFlightRef.current) return;
     setError(null);
     setSubmitting(true);
+    submitInFlightRef.current = true;
+
+    const clientError = validateLoginFields(email, password);
+    if (clientError) {
+      setError(clientError);
+      submitInFlightRef.current = false;
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const result = await login(email, password);
       if (!result.ok) {
         setError(result.message);
         return;
       }
-      router.push("/teams");
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
   }
