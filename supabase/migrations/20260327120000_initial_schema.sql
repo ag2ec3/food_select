@@ -57,6 +57,9 @@ CREATE INDEX idx_candidates_session_id ON public.candidates(session_id);
 CREATE INDEX idx_votes_session_id ON public.votes(session_id);
 CREATE INDEX idx_votes_user_id ON public.votes(user_id);
 CREATE INDEX idx_decisions_session_id ON public.decisions(session_id);
+CREATE INDEX idx_candidates_user_id ON public.candidates(user_id);
+CREATE INDEX idx_decisions_candidate_id ON public.decisions(candidate_id);
+CREATE INDEX idx_votes_candidate_id ON public.votes(candidate_id);
 
 CREATE OR REPLACE FUNCTION public.is_team_member(p_team_id uuid)
 RETURNS boolean
@@ -104,7 +107,7 @@ CREATE POLICY "teams_select_member" ON public.teams
 
 CREATE POLICY "teams_insert_authenticated" ON public.teams
   FOR INSERT TO authenticated
-  WITH CHECK (true);
+  WITH CHECK (name IS NOT NULL AND trim(name) <> '');
 
 CREATE POLICY "memberships_select_team_members" ON public.memberships
   FOR SELECT TO authenticated
@@ -112,7 +115,7 @@ CREATE POLICY "memberships_select_team_members" ON public.memberships
 
 CREATE POLICY "memberships_insert_self" ON public.memberships
   FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid());
+  WITH CHECK (user_id = (select auth.uid()));
 
 CREATE POLICY "sessions_select_team_members" ON public.sessions
   FOR SELECT TO authenticated

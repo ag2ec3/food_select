@@ -19,10 +19,18 @@ export function parseSupabasePublicEnv(): SupabasePublicEnvResult {
   const anonKey = readPublicSupabaseKey();
 
   if (!url || !anonKey) {
+    const parts: string[] = [];
+    if (!url) {
+      parts.push("NEXT_PUBLIC_SUPABASE_URL이 비어 있습니다.");
+    }
+    if (!anonKey) {
+      parts.push(
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY 또는 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY가 비어 있습니다.",
+      );
+    }
     return {
       ok: false,
-      message:
-        "Supabase 환경 변수가 없습니다. 로컬: frontend/.env.local에 NEXT_PUBLIC_SUPABASE_URL과 NEXT_PUBLIC_SUPABASE_ANON_KEY(또는 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) 설정 후 dev 서버 재시작. Vercel: 동일 이름으로 추가 후 재배포.",
+      message: `${parts.join(" ")} 로컬: 파일은 반드시 frontend/.env.local에 두고, 터미널에서 cd frontend 후 npm run dev로 실행하세요. 변수 이름 오타·앞뒤 공백·따옴표로 값 전체 감싸기를 확인하세요. Vercel: Project Settings → Environment Variables에 동일 이름 추가 후 재배포하세요.`,
     };
   }
 
