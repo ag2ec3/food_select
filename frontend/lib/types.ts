@@ -14,6 +14,13 @@ export type Membership = {
   joined_at: string;
 };
 
+/** Fields returned by GET /api/teams/[teamId]/members */
+export type TeamMemberListItem = {
+  user_id: string;
+  role: string;
+  joined_at: string;
+};
+
 export type SessionStatus = "open" | "closed";
 
 export type Session = {
