@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 import type { Vote } from "@/lib/types";
@@ -43,7 +44,7 @@ export async function POST(request: Request, context: RouteContext) {
     .maybeSingle();
 
   if (sErr) {
-    return jsonError(500, sErr.message);
+    return jsonInternalError("votes: load session", sErr);
   }
   if (!session) {
     return jsonError(404, "세션을 찾을 수 없습니다.");
@@ -60,7 +61,7 @@ export async function POST(request: Request, context: RouteContext) {
     .maybeSingle();
 
   if (cErr) {
-    return jsonError(500, cErr.message);
+    return jsonInternalError("votes: load candidate", cErr);
   }
   if (!cand) {
     return jsonError(404, "후보를 찾을 수 없습니다.");
@@ -68,11 +69,15 @@ export async function POST(request: Request, context: RouteContext) {
 
   const votedAt = new Date().toISOString();
 
-  await supabase
+  const { error: delErr } = await supabase
     .from("votes")
     .delete()
     .eq("session_id", sessionId)
     .eq("user_id", user.id);
+
+  if (delErr) {
+    return jsonInternalError("votes: delete previous", delErr);
+  }
 
   const { data: row, error: insErr } = await supabase
     .from("votes")
@@ -82,11 +87,11 @@ export async function POST(request: Request, context: RouteContext) {
       candidate_id: candidateId,
       voted_at: votedAt,
     })
-    .select("*")
+    .select("id, session_id, user_id, candidate_id, voted_at")
     .single();
 
   if (insErr) {
-    return jsonError(500, insErr.message);
+    return jsonInternalError("votes: insert", insErr);
   }
 
   return NextResponse.json(row as Vote);

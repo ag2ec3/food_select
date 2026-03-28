@@ -1,8 +1,9 @@
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 
@@ -10,7 +11,7 @@ function randomInviteCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let suffix = "";
   for (let i = 0; i < 6; i += 1) {
-    suffix += chars[Math.floor(Math.random() * chars.length)];
+    suffix += chars[randomInt(chars.length)];
   }
   return `INV-${suffix}`;
 }
@@ -25,7 +26,7 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    return jsonError(500, error.message);
+    return jsonInternalError("teams GET", error);
   }
 
   const payload = (teams ?? []).map((row) => {
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
     }
 
     if (teamErr) {
-      return jsonError(500, teamErr.message ?? "팀을 만들 수 없습니다.");
+      return jsonInternalError("teams POST: insert team", teamErr);
     }
 
     const { error: memberErr } = await supabase.from("memberships").insert({
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
     });
 
     if (memberErr) {
-      return jsonError(500, memberErr.message ?? "팀 소유자 등록에 실패했습니다.");
+      return jsonInternalError("teams POST: insert membership", memberErr);
     }
 
     const { data: team, error: readErr } = await supabase
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
       .single();
 
     if (readErr || !team) {
-      return jsonError(500, readErr?.message ?? "팀을 불러오지 못했습니다.");
+      return jsonInternalError("teams POST: read team", readErr ?? "no row");
     }
 
     return NextResponse.json({

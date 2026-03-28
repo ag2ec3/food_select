@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 import type { Candidate } from "@/lib/types";
@@ -24,34 +25,35 @@ export async function GET(_request: Request, context: RouteContext) {
     .maybeSingle();
 
   if (sErr) {
-    return jsonError(500, sErr.message);
+    return jsonInternalError("candidates GET: session", sErr);
   }
   if (!session) {
     return jsonError(404, "세션을 찾을 수 없습니다.");
   }
 
-  const { data: votes, error: vErr } = await supabase
-    .from("votes")
-    .select("candidate_id")
-    .eq("session_id", sessionId);
+  const [{ data: votes, error: vErr }, { data: candidates, error: cErr }] =
+    await Promise.all([
+      supabase
+        .from("votes")
+        .select("candidate_id")
+        .eq("session_id", sessionId),
+      supabase
+        .from("candidates")
+        .select("id, session_id, user_id, menu_name, created_at")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: true }),
+    ]);
 
   if (vErr) {
-    return jsonError(500, vErr.message);
+    return jsonInternalError("candidates GET: votes", vErr);
+  }
+  if (cErr) {
+    return jsonInternalError("candidates GET: candidates", cErr);
   }
 
   const counts = new Map<string, number>();
   for (const v of votes ?? []) {
     counts.set(v.candidate_id, (counts.get(v.candidate_id) ?? 0) + 1);
-  }
-
-  const { data: candidates, error: cErr } = await supabase
-    .from("candidates")
-    .select("*")
-    .eq("session_id", sessionId)
-    .order("created_at", { ascending: true });
-
-  if (cErr) {
-    return jsonError(500, cErr.message);
   }
 
   const list = (candidates ?? []) as Candidate[];
@@ -101,7 +103,7 @@ export async function POST(request: Request, context: RouteContext) {
     .maybeSingle();
 
   if (sErr) {
-    return jsonError(500, sErr.message);
+    return jsonInternalError("candidates POST: session", sErr);
   }
   if (!session) {
     return jsonError(404, "세션을 찾을 수 없습니다.");
@@ -117,14 +119,14 @@ export async function POST(request: Request, context: RouteContext) {
       user_id: user.id,
       menu_name: menuName,
     })
-    .select("*")
+    .select("id, session_id, user_id, menu_name, created_at")
     .single();
 
   if (iErr) {
     if (iErr.code === "23505") {
       return jsonError(409, "이미 제안된 메뉴입니다.");
     }
-    return jsonError(500, iErr.message);
+    return jsonInternalError("candidates POST: insert", iErr);
   }
 
   return NextResponse.json(row as Candidate);

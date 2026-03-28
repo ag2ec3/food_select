@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 
@@ -43,7 +44,7 @@ export async function GET(_request: Request, context: RouteContext) {
     .order("closed_at", { ascending: false, nullsFirst: false });
 
   if (sErr) {
-    return jsonError(500, sErr.message);
+    return jsonInternalError("team history GET: sessions", sErr);
   }
 
   const list = sessions ?? [];
@@ -63,10 +64,10 @@ export async function GET(_request: Request, context: RouteContext) {
     ]);
 
   if (dErr) {
-    return jsonError(500, dErr.message);
+    return jsonInternalError("team history GET: decisions", dErr);
   }
   if (vErr) {
-    return jsonError(500, vErr.message);
+    return jsonInternalError("team history GET: votes", vErr);
   }
 
   const voteCount = countBySessionId(voteRows, sessionIds);
@@ -84,7 +85,7 @@ export async function GET(_request: Request, context: RouteContext) {
       : { data: [] as { id: string; menu_name: string }[], error: null };
 
   if (cErr) {
-    return jsonError(500, cErr.message);
+    return jsonInternalError("team history GET: candidates", cErr);
   }
 
   const menuByCandidateId = new Map<string, string>();

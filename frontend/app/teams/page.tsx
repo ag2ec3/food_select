@@ -1,14 +1,28 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/Button";
 import { TeamCard } from "@/components/TeamCard";
-import { TeamCreateModal } from "@/components/TeamCreateModal";
-import { TeamJoinModal } from "@/components/TeamJoinModal";
 import { NETWORK_ERROR_MESSAGE } from "@/lib/apiErrors";
-import { createClient } from "@/lib/supabase/client";
 import type { Team } from "@/lib/types";
+
+const TeamCreateModal = dynamic(
+  () =>
+    import("@/components/TeamCreateModal").then((m) => ({
+      default: m.TeamCreateModal,
+    })),
+  { ssr: false },
+);
+
+const TeamJoinModal = dynamic(
+  () =>
+    import("@/components/TeamJoinModal").then((m) => ({
+      default: m.TeamJoinModal,
+    })),
+  { ssr: false },
+);
 
 type TeamRow = Team & { member_count: number };
 
@@ -51,7 +65,11 @@ export default function TeamsPage() {
     };
   }, [loadTeams]);
 
-  async function handleCreate(name: string) {
+  const closeCreateModal = useCallback(() => setCreateOpen(false), []);
+  const closeJoinModal = useCallback(() => setJoinOpen(false), []);
+
+  const handleCreate = useCallback(
+    async (name: string) => {
     try {
       const res = await fetch("/api/teams", {
         method: "POST",
@@ -77,32 +95,34 @@ export default function TeamsPage() {
     } catch {
       return { ok: false as const, message: NETWORK_ERROR_MESSAGE };
     }
-  }
+    },
+    [router, loadTeams],
+  );
 
-  async function handleJoin(inviteCode: string) {
+  const handleJoin = useCallback(
+    async (inviteCode: string) => {
     try {
-      const supabase = createClient();
-      const { data: teamId, error: luErr } = await supabase.rpc(
-        "lookup_team_invite",
-        { p_invite: inviteCode.trim() },
-      );
-      if (luErr || !teamId || typeof teamId !== "string") {
-        return {
-          ok: false as const,
-          message: "초대 코드를 찾을 수 없습니다. 코드를 확인해 주세요.",
-        };
-      }
-      const res = await fetch(`/api/teams/${teamId}/join`, {
+      const res = await fetch("/api/teams/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ invite_code: inviteCode }),
+        body: JSON.stringify({ invite_code: inviteCode.trim() }),
       });
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        team_id?: string;
+      };
       if (!res.ok) {
         return {
           ok: false as const,
           message: json.error ?? "팀 참가에 실패했습니다.",
+        };
+      }
+      const teamId = json.team_id;
+      if (!teamId) {
+        return {
+          ok: false as const,
+          message: "팀 참가에 실패했습니다.",
         };
       }
       await loadTeams();
@@ -111,7 +131,9 @@ export default function TeamsPage() {
     } catch {
       return { ok: false as const, message: NETWORK_ERROR_MESSAGE };
     }
-  }
+    },
+    [router, loadTeams],
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -161,12 +183,12 @@ export default function TeamsPage() {
 
       <TeamCreateModal
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={closeCreateModal}
         onCreate={handleCreate}
       />
       <TeamJoinModal
         open={joinOpen}
-        onClose={() => setJoinOpen(false)}
+        onClose={closeJoinModal}
         onJoin={handleJoin}
       />
     </div>

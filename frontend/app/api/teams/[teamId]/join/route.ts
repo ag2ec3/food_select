@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 
@@ -51,7 +52,10 @@ export async function POST(request: Request, context: RouteContext) {
     if (msg.includes("already_member")) {
       return jsonError(409, "이미 참가한 팀입니다.");
     }
-    return jsonError(500, msg || "팀 참가에 실패했습니다.");
+    if (msg.includes("not_authenticated")) {
+      return requireAuthError();
+    }
+    return jsonInternalError("join_team_by_invite", error);
   }
 
   return NextResponse.json({ ok: true });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 import type { TeamMemberListItem } from "@/lib/types";
@@ -25,7 +26,7 @@ export async function GET(_request: Request, context: RouteContext) {
     .maybeSingle();
 
   if (mErr) {
-    return jsonError(500, mErr.message);
+    return jsonInternalError("members GET: my membership", mErr);
   }
   if (!myMembership) {
     return jsonError(403, "이 팀의 멤버만 멤버 목록을 볼 수 있습니다.");
@@ -41,7 +42,7 @@ export async function GET(_request: Request, context: RouteContext) {
     if (error.code === "42501" || error.message.includes("permission")) {
       return jsonError(403, "이 팀의 멤버만 멤버 목록을 볼 수 있습니다.");
     }
-    return jsonError(500, error.message);
+    return jsonInternalError("members GET: list", error);
   }
 
   return NextResponse.json({

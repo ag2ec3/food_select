@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 import type { Session } from "@/lib/types";
@@ -31,12 +32,12 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const { data: sessions, error: sErr } = await supabase
     .from("sessions")
-    .select("*")
+    .select("id, team_id, status, created_at, closed_at")
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
 
   if (sErr) {
-    return jsonError(500, sErr.message);
+    return jsonInternalError("team sessions GET", sErr);
   }
 
   const list = (sessions ?? []) as Session[];
@@ -103,14 +104,14 @@ export async function POST(_request: Request, context: RouteContext) {
       team_id: teamId,
       status: "open",
     })
-    .select("*")
+    .select("id, team_id, status, created_at, closed_at")
     .single();
 
   if (error) {
     if (error.code === "42501" || error.message.includes("permission")) {
       return jsonError(403, "이 팀에 세션을 만들 권한이 없습니다.");
     }
-    return jsonError(500, error.message);
+    return jsonInternalError("team sessions POST", error);
   }
 
   return NextResponse.json(row as Session);

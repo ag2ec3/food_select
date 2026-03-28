@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getSupabaseAndUser,
   jsonError,
+  jsonInternalError,
   requireAuthError,
 } from "@/lib/api/routeHelpers";
 import type {
@@ -24,30 +25,71 @@ export async function GET(_request: Request, context: RouteContext) {
     return jsonError(400, "경로가 올바르지 않습니다.");
   }
 
-  const { data: session, error: sErr } = await supabase
+  const { data: sessionRow, error: sErr } = await supabase
     .from("sessions")
-    .select("*")
+    .select(
+      `
+      id,
+      team_id,
+      status,
+      created_at,
+      closed_at,
+      teams ( name )
+    `,
+    )
     .eq("id", sessionId)
     .eq("team_id", teamId)
     .maybeSingle();
 
   if (sErr) {
-    return jsonError(500, sErr.message);
+    return jsonInternalError("session detail: load session", sErr);
   }
-  if (!session) {
+  if (!sessionRow) {
     return jsonError(404, "세션을 찾을 수 없습니다.");
   }
 
-  const [{ data: candidates }, { data: votes }, { data: decision }] =
-    await Promise.all([
-      supabase
-        .from("candidates")
-        .select("*")
-        .eq("session_id", sessionId)
-        .order("created_at", { ascending: true }),
-      supabase.from("votes").select("*").eq("session_id", sessionId),
-      supabase.from("decisions").select("*").eq("session_id", sessionId).maybeSingle(),
-    ]);
+  const teamsRel = sessionRow.teams as { name: string } | { name: string }[] | null;
+  const teamNameFromRel = Array.isArray(teamsRel)
+    ? teamsRel[0]?.name
+    : teamsRel?.name;
+  const session = {
+    id: sessionRow.id,
+    team_id: sessionRow.team_id,
+    status: sessionRow.status,
+    created_at: sessionRow.created_at,
+    closed_at: sessionRow.closed_at,
+  };
+
+  const [
+    { data: candidates, error: cErr },
+    { data: votes, error: vErr },
+    { data: decision, error: dErr },
+  ] = await Promise.all([
+    supabase
+      .from("candidates")
+      .select("id, session_id, user_id, menu_name, created_at")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("votes")
+      .select("id, session_id, user_id, candidate_id, voted_at")
+      .eq("session_id", sessionId),
+    supabase
+      .from("decisions")
+      .select("id, session_id, candidate_id, decided_at")
+      .eq("session_id", sessionId)
+      .maybeSingle(),
+  ]);
+
+  if (cErr) {
+    return jsonInternalError("session detail: candidates", cErr);
+  }
+  if (vErr) {
+    return jsonInternalError("session detail: votes", vErr);
+  }
+  if (dErr) {
+    return jsonInternalError("session detail: decision", dErr);
+  }
 
   const candList = (candidates ?? []) as Candidate[];
   const voteList = (votes ?? []) as Vote[];
@@ -72,6 +114,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
   return NextResponse.json({
     session: session as Session,
+    team_name: teamNameFromRel ?? null,
     candidates: candidatesWithCounts,
     votes: voteList,
     decision: decisionRow,

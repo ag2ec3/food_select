@@ -74,24 +74,24 @@ export default function TeamSessionsPage() {
     setLoadError(null);
     setMembersError(null);
     try {
-      const [teamsRes, sessRes, memRes] = await Promise.all([
-        fetch("/api/teams", { credentials: "same-origin" }),
+      const [teamRes, sessRes, memRes] = await Promise.all([
+        fetch(`/api/teams/${teamId}`, { credentials: "same-origin" }),
         fetch(`/api/teams/${teamId}/sessions`, { credentials: "same-origin" }),
         fetch(`/api/teams/${teamId}/members`, { credentials: "same-origin" }),
       ]);
 
-      const teamsJson = (await teamsRes.json().catch(() => ({}))) as {
+      const teamJson = (await teamRes.json().catch(() => ({}))) as {
         error?: string;
-        teams?: (Team & { member_count: number })[];
+        team?: Team;
       };
-      if (!teamsRes.ok) {
-        setLoadError(teamsJson.error ?? "팀 정보를 불러오지 못했습니다.");
+      if (!teamRes.ok) {
+        setLoadError(teamJson.error ?? "팀 정보를 불러오지 못했습니다.");
         setTeam(null);
         setSessions([]);
         setMembers([]);
         return;
       }
-      const found = (teamsJson.teams ?? []).find((t) => t.id === teamId);
+      const found = teamJson.team;
       if (!found) {
         setLoadError(null);
         setTeam(null);
@@ -158,6 +158,11 @@ export default function TeamSessionsPage() {
     return partitionSessions(base);
   }, [sessions]);
 
+  const sessionMeta = useMemo(
+    () => new Map(sessions.map((s) => [s.id, s])),
+    [sessions],
+  );
+
   async function handleNewSession() {
     if (!teamId) return;
     setCreateError(null);
@@ -220,8 +225,6 @@ export default function TeamSessionsPage() {
       </div>
     );
   }
-
-  const sessionMeta = new Map(sessions.map((s) => [s.id, s]));
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">

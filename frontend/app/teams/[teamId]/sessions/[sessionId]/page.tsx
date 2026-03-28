@@ -17,6 +17,7 @@ type CandidateRow = Candidate & { vote_count: number };
 
 type SessionDetailJson = {
   session: Session;
+  team_name: string | null;
   candidates: CandidateRow[];
   votes: Vote[];
   decision: Decision | null;
@@ -55,24 +56,10 @@ export default function SessionDetailPage() {
     if (!teamId || !sessionId) return;
     setLoadError(null);
     try {
-      const [teamsRes, detailRes, candRes] = await Promise.all([
-        fetch("/api/teams", { credentials: "same-origin" }),
-        fetch(`/api/teams/${teamId}/sessions/${sessionId}`, {
-          credentials: "same-origin",
-        }),
-        fetch(`/api/sessions/${sessionId}/candidates`, {
-          credentials: "same-origin",
-        }),
-      ]);
-
-      const teamsJson = (await teamsRes.json().catch(() => ({}))) as {
-        teams?: { id: string; name: string }[];
-      };
-      let resolvedTeamName: string | null = null;
-      if (teamsRes.ok) {
-        resolvedTeamName =
-          (teamsJson.teams ?? []).find((x) => x.id === teamId)?.name ?? null;
-      }
+      const detailRes = await fetch(
+        `/api/teams/${teamId}/sessions/${sessionId}`,
+        { credentials: "same-origin" },
+      );
 
       const json = (await detailRes.json().catch(() => ({}))) as {
         error?: string;
@@ -81,29 +68,25 @@ export default function SessionDetailPage() {
       if (!detailRes.ok) {
         setLoadError(json.error ?? "세션을 불러오지 못했습니다.");
         setDetail(null);
-        setTeamName(resolvedTeamName);
+        setTeamName(null);
         return;
       }
       if (!json.session) {
         setLoadError("세션을 불러오지 못했습니다.");
         setDetail(null);
-        setTeamName(resolvedTeamName);
+        setTeamName(null);
         return;
       }
 
-      const candJson = (await candRes.json().catch(() => ({}))) as {
-        error?: string;
-        candidates?: CandidateRow[];
-      };
-      const candidatesFromApi =
-        candRes.ok && Array.isArray(candJson.candidates)
-          ? candJson.candidates
-          : (json.candidates ?? []);
-
-      setTeamName(resolvedTeamName ?? "팀");
+      const name =
+        typeof json.team_name === "string" && json.team_name.trim() !== ""
+          ? json.team_name
+          : "팀";
+      setTeamName(name);
       setDetail({
         session: json.session,
-        candidates: candidatesFromApi,
+        team_name: json.team_name ?? null,
+        candidates: Array.isArray(json.candidates) ? json.candidates : [],
         votes: json.votes ?? [],
         decision: json.decision ?? null,
         confirmed_menu_name: json.confirmed_menu_name ?? null,

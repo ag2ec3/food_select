@@ -32,22 +32,22 @@ export default function TeamHistoryPage() {
     if (!teamId) return;
     setLoadError(null);
     try {
-      const [teamsRes, historyRes] = await Promise.all([
-        fetch("/api/teams", { credentials: "same-origin" }),
+      const [teamRes, historyRes] = await Promise.all([
+        fetch(`/api/teams/${teamId}`, { credentials: "same-origin" }),
         fetch(`/api/teams/${teamId}/history`, { credentials: "same-origin" }),
       ]);
 
-      const teamsJson = (await teamsRes.json().catch(() => ({}))) as {
+      const teamJson = (await teamRes.json().catch(() => ({}))) as {
         error?: string;
-        teams?: Team[];
+        team?: Team;
       };
-      if (!teamsRes.ok) {
-        setLoadError(teamsJson.error ?? "팀 정보를 불러오지 못했습니다.");
+      if (!teamRes.ok) {
+        setLoadError(teamJson.error ?? "팀 정보를 불러오지 못했습니다.");
         setTeam(null);
         setHistoryRows([]);
         return;
       }
-      const found = (teamsJson.teams ?? []).find((t) => t.id === teamId);
+      const found = teamJson.team;
       if (!found) {
         setTeam(null);
         setHistoryRows([]);
