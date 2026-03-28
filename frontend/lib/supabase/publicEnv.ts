@@ -5,15 +5,24 @@ export type SupabasePublicEnvResult =
 /**
  * Parse public Supabase env without throwing (for Edge middleware: uncaught errors → Vercel MIDDLEWARE_INVOCATION_FAILED).
  */
+function readPublicSupabaseKey(): string {
+  const publishable =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
+  // Prefer publishable when both are set: a stale legacy anon + new publishable is a common misconfiguration.
+  if (publishable) return publishable;
+  return anon;
+}
+
 export function parseSupabasePublicEnv(): SupabasePublicEnvResult {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
+  const anonKey = readPublicSupabaseKey();
 
   if (!url || !anonKey) {
     return {
       ok: false,
       message:
-        "Supabase 환경 변수가 없습니다. 로컬: frontend/.env.local에 NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY 설정 후 dev 서버 재시작. Vercel: Project → Settings → Environment Variables에 동일 이름으로 추가 후 재배포.",
+        "Supabase 환경 변수가 없습니다. 로컬: frontend/.env.local에 NEXT_PUBLIC_SUPABASE_URL과 NEXT_PUBLIC_SUPABASE_ANON_KEY(또는 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) 설정 후 dev 서버 재시작. Vercel: 동일 이름으로 추가 후 재배포.",
     };
   }
 
