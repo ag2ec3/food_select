@@ -1,0 +1,22 @@
+---
+description: Tailwind CSS — 유틸리티 우선, 테마·반응형, 인라인 스타일 한계
+globs:
+  - "**/*.tsx"
+  - "tailwind.config.*"
+  - "postcss.config.*"
+alwaysApply: false
+---
+
+# 스타일 (Tailwind CSS)
+
+## 반드시 (DO)
+
+- **새 UI는 Tailwind 유틸리티 클래스**로 작성한다.
+- **spacing / typography / color**는 `tailwind.config`에 정의된 테마·토큰과 맞춘다.
+- **반응형**은 `sm:`, `md:` 등 프로젝트 기본 브레이크포인트를 사용한다.
+- **인라인 `style`**: 접근성상 필요한 값, 런타임 동적 값 등 **필요한 경우만** 제한적으로 사용한다.
+
+## 금지 (DON'T)
+
+- **CSS Modules, styled-components, 별도 vanilla CSS 파일**로 새 UI의 주 스타일을 만들지 않는다. (기존 코드에 이미 있으면 유지만 하고, **신규는 Tailwind 우선**)
+- **인라인 스타일로 레이아웃 전체**를 구성하지 않는다.

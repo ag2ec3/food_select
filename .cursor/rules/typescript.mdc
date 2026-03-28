@@ -1,0 +1,23 @@
+---
+description: TypeScript — 타입 안전, strict, any 금지 관행
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript
+
+## 반드시 (DO)
+
+- **새 기능은 TypeScript만** 사용한다. (`.ts`, `.tsx`)
+- **공개 경계에 명시적 타입**을 둔다: 컴포넌트 props, 함수 공개 시그니처, API·Route Handler 응답 형태, DB 행(row) 등.
+- **`any` 대안**: `unknown` + 타입 가드, 또는 Supabase 생성 타입(`Database` 등)을 사용한다.
+- **`tsconfig` strict**를 깨지 않는다.
+
+## 금지 (DON'T)
+
+- **`.js` / `.jsx`로 새 페이지·컴포넌트·모듈**을 추가하지 않는다.
+- **타입 오류를 `any`로만 덮어쓰고** 넘어가지 않는다.
+
+## 관련 규칙
+
+- DB 타입: `supabase-database.mdc`
